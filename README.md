@@ -12,5 +12,10 @@ mpiexec --version
 ##compilar
 
 ```
-mpicxx main.cpp -0 ejemplo01
+mpicxx main.cpp -o ejemplo01
 ```
+
+```
+ejecutar
+```
+mpiexec -n 4 ./nameProject
