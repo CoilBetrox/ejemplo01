@@ -83,6 +83,7 @@ int main(int argc, char ** argv) {
         for(int i = 0 ; i<size -1; i++) {
            MPI_Recv(&sumaParcial[i],1 ,MPI_DOUBLE,MPI_ANY_SOURCE,0,MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
         } 
+        
         for(int i = 0 ; i<size -1; i++){
             respuesta+=sumaParcial[i]; 
         }

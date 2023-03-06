@@ -4,6 +4,7 @@
 #include <omp.h>
 #include <fstream>
 #include <vector>
+#include <ctime>
 
 using namespace std;
 #define nthreads 4
@@ -11,32 +12,50 @@ using namespace std;
 string nombreArchivo = "datos.txt";
 ifstream archivo(nombreArchivo.c_str());
 string linea;
+int n = calculaTamanio(nombreArchivo);
+
 
 //Serial
 std::vector<int> frec_serial( string archiv ) {
     ifstream archivo(archiv.c_str());
     std::vector<int> repeticiones;
+    for(int i=0; i<=100; i++){
+        repeticiones[i]=0;
+    }
     string linea;
+    double start_time = MPI_Wtime();
     while (getline(archivo, linea)) {
         
-        //cout << "Una línea: ";
-        int num = stoi(linea);      //convierte a int
+        int num = stoi(linea);    
         for ( int i = 0; i <= 100; i++ ){
             if(num == i){
                 repeticiones[i] += 1;
             }
         }
-        //cout << linea << endl;
     }
+    double main_time = MPI_Wtime()-start_time;
+    std::printf("El tiempo de trabajo es: %lf ", main_time);
     return repeticiones;
 }
 
 
 //genera formato de impresion
 void format_serial(std::vector<int> frec_serial){
+    int n = 17000000; 
     for( int i = 0; i <= 100; i++ ){
-        std::printf("%d %d %d\n",i , frec_serial[i], frec_serial[i]/100 );
+        std::printf("%d %d %d\n",i , frec_serial[i], frec_serial[i]/n *100 );
     }
+}
+
+int calculaTamanio(string archiv){
+    int n = 0;
+    ifstream archivo(archiv.c_str()); 
+    string linea;
+    while (getline(archivo, linea)) {
+        int num = stoi(linea);    
+        n += 1;
+    }
+    return n;
 }
 
 
@@ -44,10 +63,14 @@ void format_serial(std::vector<int> frec_serial){
 std::vector<int> frec_omp( string archiv ) {
     ifstream archivo(archiv.c_str());
     std::vector<int> repeticiones;
+    for(int i=0; i<=100; i++){
+        repeticiones[i]=0;
+    }
     string linea;
 
     int thread;
     omp_set_num_threads(nthreads);
+    double start_time = MPI_Wtime();
     #pragma omp parallel private(thread)
     {
         #pragma omp for schedule( auto )
@@ -61,6 +84,8 @@ std::vector<int> frec_omp( string archiv ) {
             }
         }
     }
+    double main_time = MPI_Wtime()-start_time;
+    std::printf("El tiempo de trabajo es: %lf ", main_time);
     return repeticiones;
 }
 
@@ -86,6 +111,7 @@ int main(int argc, char** argv) {
     //MPI
     int rank;
     int size;
+    //int n=0;
 
     string nombreArchivo = "datos.txt";
     ifstream archivo(nombreArchivo.c_str());
@@ -94,68 +120,72 @@ int main(int argc, char** argv) {
     
     string linea;
 
-
-
     MPI_Init(&argc, &argv);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if(  rank == 0 ){
+    if( rank == 0 ){
         while (getline(archivo, linea)) {
             int num = stoi(linea);  
-            datos.insert(num);
+            datos.push_back(num);
+            n += 1 ;
         }
-        int cant = datos.size();
-        
-        MPI_Send(&datos/4, cant/4, MPI_INT, 1, 0,MPI_COMM_WORLD);
-
-        int suma_parcial = 0;
-        for(int i = 0; i<50; i++){
-            suma_parcial = suma_parcial + data[i];
+        int cant = datos.size(); 
+        double start_time = MPI_Wtime();
+        //envío de datos
+        for(int i=1; i<size; i++){
+            std::printf("El valor que se va a enviar sera desde: %d hasta %d al rank %d \n", i*(n/size), ((i+1)* (n/size)-1), i); 
+            MPI_Send(&datos[i*(n/size)],n/size -1,MPI_INT,i,0,MPI_COMM_WORLD);
         }
 
-        int suma_parcial_2 = 0;
-        MPI_Recv(&suma_parcial_2, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        std::vector<int> vectorParcial;
 
-        int suma_total = suma_parcial + suma_parcial_2;
-
-        printf("Suma total: %d\n",suma_total);
-    }
-    else if( rank == 1 ){
-        printf("Rank %d recibiendo...\n",rank);
-        MPI_Recv(repeticiones, cant/4, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        
-        for(int i = 0; i<cant/4; i++){
+        for (int i = 0; i<=100; i++){
+            vectorParcial[i] = 0;
+        }
+        for(int i = 0; i < n/size; i++){
             while (getline(archivo, linea)) {
                 int num = stoi(linea);  
                 if(i == num){
-                    repeticiones[i] += 1;
+                    vectorParcial[i] += 1;
                 }
             }
         }
 
-        MPI_Send(&repeticiones, cant/4, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        std::vector<int> vectorParcial1;
+        for(int i = 0 ; i<size -1; i++) {
+           MPI_Recv(&vectorParcial1[i],1 ,MPI_DOUBLE,MPI_ANY_SOURCE,0,MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
+        } 
+        for(int i = 0 ; i<size -1; i++){
+            for( int i = 0; i<=100; i++){
+                vectorParcial[i] += vectorParcial1[i]; 
+            }
+        }
+
+        format_serial(vectorParcial);
+        double main_time = MPI_Wtime()-start_time;
+        std::printf("El tiempo de trabajo es: %lf ", main_time);
     }
+    else {
+        printf("Rank %d recibiendo...\n",rank);
+        MPI_Recv(datos.data(), n/size -1,MPI_INT,MPI_ANY_SOURCE,0,MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        std::vector<int> vectorParcial1;
+        for (int i = 0; i<=100; i++){
+            vectorParcial1[i] = 0;
+        }
 
+        for(int i = 0; i < n/size; i++){
+            while (getline(archivo, linea)) {
+                int num = stoi(linea);  
+                if(i == num){
+                    vectorParcial1[i] += 1;
+                }
+            }
+        }
+        MPI_Send(vectorParcial1.data(), n/size -1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
     MPI_Finalize();
-
-    /*
-    MPI_Send(&rank //referencia al vector de elementos a enviar
-            ,1 // tamaño del vector a enviar
-            ,MPI_INT // Tipo de dato que envias
-            ,rank // pid del proceso destino
-            ,0 //etiqueta
-            ,MPI_COMM_WORLD); //Comunicador por el que se manda
- 
-    MPI_Recv(&contador // Referencia al vector donde se almacenara lo recibido
-            ,1 // tamaño del vector a recibir
-            ,MPI_INT // Tipo de dato que recibe
-            ,rank // pid del proceso origen de la que se recibe
-            ,0 // etiqueta
-            ,MPI_COMM_WORLD // Comunicador por el que se recibe
-            ,&estado); // estructura informativa del estado
-    */
 
     return 0;
 
