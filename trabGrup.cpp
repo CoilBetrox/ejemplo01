@@ -1,5 +1,3 @@
-//Trabajo Grupal - Asimbaya Ismael, Montero Anthonny, Troya Roberth 
-
 #include <iostream>
 #include <cmath>
 #include <omp.h>
@@ -18,7 +16,7 @@ double trapecioSerial( double a, double b, double n){
     }
     return h * integral; 
 }
-double trapecioOMP(double a, double b, double n){
+/*double trapecioOMP(double a, double b, double n){
     int numero_hilos = 0; 
     float h = (b-a)/n; 
     #pragma omp parallel
@@ -41,7 +39,7 @@ double trapecioOMP(double a, double b, double n){
        respuesta= respuesta+sumas_parciales[i];
     }
     return h * respuesta;
-}
+}*/
 
 int main(int argc, char ** argv) {
     //LLamada al metodo serial 
@@ -55,7 +53,7 @@ int main(int argc, char ** argv) {
     MPI_Init(&argc,&argv); 
     int rank; 
     int size; 
-    int n = 10000; 
+    int n = 10000000; 
     int* data = new int[n]; 
     double a = 0; 
     double b = 1; 
@@ -93,12 +91,11 @@ int main(int argc, char ** argv) {
         double main_time = MPI_Wtime()-start_time;
         std::printf("El tiempo de trabajo es: %lf ", main_time); 
     }else{
-        int* dataParcial = new int[n/size]; 
-        MPI_Recv(dataParcial, n/size -1,MPI_INT,MPI_ANY_SOURCE,0,MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
+        MPI_Recv(data, n/size -1,MPI_INT,MPI_ANY_SOURCE,0,MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
         std::printf("Hola, soy el rank %d, de un total de %d procesos \n", rank, size);
         double sumaParcial = 0;
         for (int i = 0; i < n/size ; i++ ){
-            sumaParcial += f(a + dataParcial[i] * h);    
+            sumaParcial += f(a + data[i] * h);    
         }             
         MPI_Send(&sumaParcial,1,MPI_DOUBLE,0,0,MPI_COMM_WORLD);
     }
